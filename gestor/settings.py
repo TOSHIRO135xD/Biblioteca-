@@ -10,7 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +23,44 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-38s%+z86ib*$70j&_l73#1i&yiezd+h^@6-u&80zwzug-%d0$5'
+SECRET_KEY = os.environ.get(
+    'SECRET_KEY',
+    'django-insecure-local-development-key',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = (
+    os.environ.get('DEBUG', 'true').lower() == 'true'
+    and 'RENDER' not in os.environ
+)
 
-ALLOWED_HOSTS = []
+if 'RENDER' in os.environ and not os.environ.get('SECRET_KEY'):
+    raise RuntimeError('Set SECRET_KEY in the Render environment variables.')
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
+render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if render_hostname:
+    ALLOWED_HOSTS.append(render_hostname)
+    CSRF_TRUSTED_ORIGINS = [f'https://{render_hostname}']
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
+CSRF_TRUSTED_ORIGINS.extend(
+    origin.strip()
+    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+)
+
+if 'RENDER' in os.environ:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 3600
 
 
 # Application definition
@@ -42,6 +77,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -74,10 +110,11 @@ WSGI_APPLICATION = 'gestor.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
 
@@ -115,7 +152,16 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 
 # Email
@@ -123,6 +169,18 @@ STATIC_URL = 'static/'
 
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': (
+            'django.core.mail.backends.smtp.EmailBackend'
+            if 'RENDER' in os.environ
+            else 'django.core.mail.backends.console.EmailBackend'
+        ),
+        'OPTIONS': {
+            'host': os.environ.get('EMAIL_HOST', 'localhost'),
+            'port': int(os.environ.get('EMAIL_PORT', '587')),
+            'username': os.environ.get('EMAIL_HOST_USER', ''),
+            'password': os.environ.get('EMAIL_HOST_PASSWORD', ''),
+            'use_tls': os.environ.get('EMAIL_USE_TLS', 'true').lower() == 'true',
+            'use_ssl': os.environ.get('EMAIL_USE_SSL', 'false').lower() == 'true',
+        },
     },
 }

@@ -12,7 +12,7 @@ class autor(models.Model):
 class libro(models.Model):
     titulo = models.CharField(max_length=500)
     descripcion = models.TextField()
-    autor_id = models.ForeignKey(autor,primary_key=id, on_delete=models.CASCADE)
+    autor_id = models.ForeignKey(autor, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.titulo
