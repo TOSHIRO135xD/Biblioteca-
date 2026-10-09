@@ -11,14 +11,14 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='libro',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
-        ),
         migrations.AlterField(
             model_name='libro',
             name='autor_id',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='biblioteca.autor'),
+        ),
+        migrations.AddField(
+            model_name='libro',
+            name='id',
+            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
         ),
     ]
